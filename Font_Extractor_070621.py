@@ -7,7 +7,7 @@
 #Project: Font extractor
 #Date: 07.06.21
 #Description: Google fonts can be downloaded all simultaneously from githib, however they are all in directories and
-#subd-irectories (source: https://github.com/google/fonts) this script unpacks them all into a single directory for
+#sub-directories (source: https://github.com/google/fonts) this script unpacks them all into a single directory for
 #easy installation.
 #In the event files without an extension are found (eg. AUTHORS/CONTRIBUTORS/README) these need to be deleted before proceeding
 '''
@@ -18,7 +18,8 @@ import re
 import shutil
 
 #Starting folder
-crawl_dir = "Google_fonts_test"
+wd = os.getcwd() #current working directory
+crawl_dir = "Google_fonts_all" #crawl start folder
 
 #creating regex checks
 re_dir = re.compile("^[^.]+$") #directory names should not contain dots
@@ -99,25 +100,26 @@ while uc != 0:
     #this is done at the end of the while loop so new dirs are factored in to whether crawl continues
     uc = buffer.query("crawled == False").count()["crawled"]
 
-
-
-
-
-
-
-
-
 #generating list of fonts to move
 font_list = buffer[buffer.clas == "font"]
+font_list = list(font_list["path"])
+
+re_fnt_name = re.compile("^(([^\/|\.])*\/)*") #regex to remove suffix from font path to generate font name
 
 #iterating through fonts and moving them to Font_deposit folder
-
-font_path = font_list["path"][64]
-
-
-re_fnt_name = re.compile("^(([^\/|\.])*\/)*") #regext to remove suffix from font path to generate font name
-font_name = re.sub(re_fnt_name,"",font_path)
+for font_path in font_list:
 
 
+    #extracting font name
+    font_name = re.sub(re_fnt_name,"",font_path)
+
+    #origin and target for file moves
+    origin = os.path.join(wd,font_path) #generating origin
+
+    target = os.path.join(wd,"Fonts_deposit",font_name)#genenrating target
+    #target = re.sub(re_fwd, "/", target)
+
+    #performing font file move
+    shutil.copyfile(origin,target)
 
 print("The code has made it to the end")
