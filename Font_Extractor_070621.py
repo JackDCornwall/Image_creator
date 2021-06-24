@@ -122,4 +122,5 @@ for font_path in font_list:
     #performing font file move
     shutil.copyfile(origin,target)
 
-print("The code has made it to the end")
+#code success message
+print("The code has run successfully")
