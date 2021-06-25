@@ -10,22 +10,46 @@
 '''
 #importing required packages
 import cv2
+import os
+import random
+import numpy as np
+from PIL import ImageFont,ImageDraw,Image
 
 ###########----SETTINGS----###########
 blanks = True #should blanks be generated? (Empty sudoku cells)
 chars = "0123456789" #All characters to include (Blanks are denoted above)
-iterations = 10 #number of images to create per character
+iterations = 1000 #number of images to create per character
 ######################################
 
 #extracting characters from string
 chars = list(chars)
 
-#defining a function that returns a square with randomized features as needed
-#in future versions of the code this will create a more complex square for use
-def getSquare_v1():
+#generating list of all fonts on pc
+fonts = os.listdir("C://Windows/Fonts/")
 
-    img = cv2.imread("White_square_sample_32x32.jpg") #imports white square
+#################################################----IMPORT FUNCTIONS----#################################################
+# defining a function that returns a square with randomized features as needed
+# in future versions of the code this will create a more complex square for use
+def getSquare_v1():
+    img = cv2.imread("White_square_sample_32x32.jpg")  # imports white square
     return img
+
+# def getFont_v1():
+#     font = cv2.FONT_HERSHEY_SIMPLEX  # setting font
+#
+#     return font
+
+#random font selection
+def getFont_v2(font_list):
+
+    font_num = random.randrange(0,len(font_list))
+
+    return font_list[font_num]
+
+def getColor_v1():
+    color = [0,0,0]
+    return color
+#################################################----IMPORT FUNCTIONS----#################################################
 
 #appending blank if requested by user in settings
 if blanks == True:
@@ -41,9 +65,47 @@ for i in range(iterations):
 
         img_in = getSquare_v1() #importing a square to overlay a character on
 
-        #adding text to square
+        #adding letter unless a blank is required
+        if char != "Blank":
 
-        print(i, char)
+            image = getSquare_v1()  # importing square
+
+            image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  #converting image into RGB for pil
+
+            pil_image = Image.fromarray(image_rgb, "RGB")  #convcerting to pil image object
+
+            draw = ImageDraw.Draw(pil_image)  # preparing window to be drawn on
+
+            font = getFont_v2(fonts)  # randomly selecting a font from the list
+
+            font = ImageFont.truetype(font,12) #preparing to "draw" letter on with selected font
+
+            draw.text((10,8),char,font=font,fill=(0,0,0)) #drawing
+
+            drawn_image = cv2.cvtColor(np.array(pil_image),cv2.COLOR_RGB2BGR) #converting image back to OpenCV format
+
+            image = drawn_image
+
+        else:
+            image = img_in
+
+        cv2.imshow("Output",image)
+
+        cv2.waitKey(250)
+
+
+
+
+
+
+
+
+
 
 #code success message
 print("The code has run successfully")
+
+
+
+
+
