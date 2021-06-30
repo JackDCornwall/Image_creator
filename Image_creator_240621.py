@@ -14,13 +14,13 @@ import os
 import random
 import numpy as np
 import pandas as pd
-from PIL import ImageFont,ImageDraw,Image
+from PIL import ImageFont,ImageDraw,Image,ImageOps
 from fontTools.ttLib import TTFont
 
 ###########----SETTINGS----###########
 blanks = True #should blanks be generated? (Empty sudoku cells)
 chars = "0ABC89" #All characters to include (Blanks are denoted above)
-iterations = 100 #number of images to create per character
+iterations = 10000 #number of images to create per character
 ######################################
 
 #extracting characters from string
@@ -48,6 +48,15 @@ fonts = fonts.loc[fonts[0].str.contains("^.*\.CompositeFont$")==False]
 #removing all .xml fonts as these break the glyph check function
 fonts = fonts.loc[fonts[0].str.contains("^.*\.xml$|^.*\.XML$")==False]
 
+#removing all .ini fonts as these break the glyph check function
+fonts = fonts.loc[fonts[0].str.contains("^.*\.ini$")==False]
+
+#removing all .dat fonts as these break the glyph check function
+fonts = fonts.loc[fonts[0].str.contains("^.*\.dat$")==False]
+
+#removing the deleted subfolder
+fonts = fonts.loc[fonts[0].str.contains("^Deleted$")==False]
+
 #resetting the index as all .fon fonts have been removed
 fonts = fonts.reset_index(drop=True)
 ###############################################################
@@ -57,13 +66,15 @@ fonts = fonts.reset_index(drop=True)
 # defining a function that returns a square with randomized features as needed
 # in future versions of the code this will create a more complex square for use
 def getSquare_v1():
-    img = cv2.imread("White_square_sample_32x32.jpg")  # imports white square
+    #img = cv2.imread("Black_square_sample_32x32.jpg")  # imports white square
+    img = np.zeros((32,32,3),dtype="uint8") # since this will be used for a mask it is fine to be pure black
     return img
 
-def getFont_v1():
-    font = fonts[0][0]  # setting font
-
-    return font
+# #testing font functions
+# def getFont_v1():
+#     font = fonts[0][0]  # setting font
+#
+#     return font
 
 #random font selection
 def getFont_v2(font_list):
@@ -86,9 +97,15 @@ def glyphCheck(font,char):
     #running through tables in fonts cmap
     for table in gFont["cmap"].tables:
 
-        #checking if character has a font
-        if ord(char) in table.cmap.keys():
-            return True #returns true if a glyph is found
+        #font Cmaps can flag AssertionErrors, these are caught here
+        try:
+            #checking if character has a font
+            if ord(char) in table.cmap.keys():
+                return True #returns true if a glyph is found
+
+        #printing error message
+        except AssertionError:
+            print("Skipping font:",font_path,"due to Assertion Error in Glyph Check")
 
     return False #returns false if a glyph cannot be found
 
@@ -123,7 +140,7 @@ def getFontSize(font,char):
 #getting starting location based on letter size and a bit of random flair
 def getLoc(dim):
 
-    if max(dim)>31:
+    if max(dim)>30:
         return (0,0) #if a ridiculously large font is detected shove it in as best as possible
 
     ####Starting X coordinate ####
@@ -154,6 +171,13 @@ def getLoc(dim):
 
     return (y_loc,x_loc)
 
+#creating a mask from fed in image
+def applyMask(img,mask):
+
+    
+
+
+
 ########################################################################################################################
 #appending blank if requested by user in settings
 if blanks == True:
@@ -168,6 +192,7 @@ for i in range(iterations):
     for char in chars:
 
         img_in = getSquare_v1() #importing a square to overlay a character on
+        print(img_in.shape)
 
         #adding letter unless a blank is required
         if char != "Blank":
@@ -194,7 +219,7 @@ for i in range(iterations):
 
                 font = ImageFont.truetype(font,font_size) #preparing to "draw" letter on with selected font
 
-                draw.text(start_loc,char,font=font,fill=(0,0,0)) #drawing if possible
+                draw.text(start_loc,char,font=font,fill=(255,255,255)) #drawing if possible
 
                 drawn_image = cv2.cvtColor(np.array(pil_image),cv2.COLOR_RGB2BGR) #converting image back to OpenCV format
 
