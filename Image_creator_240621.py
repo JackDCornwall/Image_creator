@@ -20,7 +20,7 @@ from fontTools.ttLib import TTFont
 ###########----SETTINGS----###########
 blanks = True #should blanks be generated? (Empty sudoku cells)
 chars = "0ABC89" #All characters to include (Blanks are denoted above)
-iterations = 10000 #number of images to create per character
+iterations = 1 #number of images to create per character
 ######################################
 
 #extracting characters from string
@@ -65,7 +65,25 @@ fonts = fonts.reset_index(drop=True)
 #################################################----IMPORT FUNCTIONS----#################################################
 # defining a function that returns a square with randomized features as needed
 # in future versions of the code this will create a more complex square for use
+#gets background
 def getSquare_v1():
+    #imports the required colour square, mostly for debugging purposes
+    #img = cv2.imread("Black_square_sample_32x32.jpg") #Black
+    #img = cv2.imread("White_square_sample_32x32.jpg") #White
+    img = cv2.imread("Pink_square_sample_32x32.jpg") #Pink
+    #img = cv2.imread("Green_square_sample_32x32.jpg") #Green
+    return img
+
+#gets foreground
+def getSquare_v1_green():
+    #imports the required colour square, mostly for debugging purposes
+    #img = cv2.imread("Black_square_sample_32x32.jpg") #Black
+    #img = cv2.imread("White_square_sample_32x32.jpg") #White
+    #img = cv2.imread("Pink_square_sample_32x32.jpg") #Pink
+    img = cv2.imread("Green_square_sample_32x32.jpg") #Green
+    return img
+
+def getSquare_v2():
     #img = cv2.imread("Black_square_sample_32x32.jpg")  # imports white square
     img = np.zeros((32,32,3),dtype="uint8") # since this will be used for a mask it is fine to be pure black
     return img
@@ -172,11 +190,11 @@ def getLoc(dim):
     return (y_loc,x_loc)
 
 #creating a mask from fed in image
-def applyMask(img,mask):
+def applyMask(src,mask):
 
-    
+    maskApplied = cv2.bitwise_and(src,src,mask=mask)
 
-
+    return maskApplied
 
 ########################################################################################################################
 #appending blank if requested by user in settings
@@ -191,8 +209,7 @@ for i in range(iterations):
     #loping through each letter
     for char in chars:
 
-        img_in = getSquare_v1() #importing a square to overlay a character on
-        print(img_in.shape)
+        img_in = getSquare_v2()  #importing a square to overlay a character on
 
         #adding letter unless a blank is required
         if char != "Blank":
@@ -225,8 +242,39 @@ for i in range(iterations):
 
                 image = drawn_image #selecting output if font has been added
 
+                #creating mask by converting BGR image into
+                mask = cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
+                mask[mask>1] = 1 #ensuring all values are 1 or 0
+
+                green = getSquare_v1_green()
+                pink = getSquare_v1()
+                # pink = cv2.cvtColor(pink,cv2.COLOR_RGB2RGBA)
+                #
+                # #generating alpha layer from mask
+                # _,alpha = cv2.threshold(mask,0,255,cv2.THRESH_BINARY)
+                #
+                # #Applying mask (Generating image with black background
+                # image = applyMask(green,mask=mask)
+                #
+                # #splitting bgr elements of image
+                # b,g,r = cv2.split(image)
+                #
+                # #merging all elements into rgba image
+                # rgba = [b,g,r,alpha]
+                # overlay = cv2.merge(rgba,4) #creating 4 color channel (RGBA) image
+                #
+                # image = cv2.addWeighted(overlay,1,pink,1,0)
+
+                image_out = np.copy(pink)#creating output image (with background to overlay letter)
+
+                #overlaying each BGR channel foreground onto background as dictated by mask
+                image_out[:, :, 0] = np.where(mask == 1, green[:, :, 0], pink[:, :, 0])
+                image_out[:, :, 1] = np.where(mask == 1, green[:, :, 1], pink[:, :, 1])
+                image_out[:, :, 2] = np.where(mask == 1, green[:, :, 2], pink[:, :, 2])
+
                 #displaying for test purposes
-                cv2.imshow("Output", image)
+                cv2.imshow("Output", image_out)
+
                 cv2.waitKey(250)
 
             else:
@@ -240,7 +288,6 @@ for i in range(iterations):
             # #displaying for test purposes
             # cv2.imshow("Output",image)
             # cv2.waitKey(250)
-
 
 #code success message
 print("The code has run successfully")
