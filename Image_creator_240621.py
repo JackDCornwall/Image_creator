@@ -19,15 +19,19 @@ from fontTools.ttLib import TTFont
 
 ###########----SETTINGS----###########
 blanks = True #should blanks be generated? (Empty sudoku cells)
-chars = "0ABC89" #All characters to include (Blanks are denoted above)
-iterations = 1 #number of images to create per character
+chars = ",.?" #All characters to include (Blanks are denoted above)
+iterations = 100 #number of images to create per character
 ######################################
 
 #extracting characters from string
 chars = list(chars)
 
-#setting font path
+#setting paths
+wd_path = os.getcwd() #current working directory
 fonts_path = "C://Windows/Fonts/"
+background_path = r"Backgrounds"
+overlay_path = "Overlays"
+
 
 #generating list of all fonts on pc
 fonts = os.listdir(fonts_path)
@@ -73,6 +77,29 @@ def getSquare_v1():
     img = cv2.imread("Pink_square_sample_32x32.jpg") #Pink
     #img = cv2.imread("Green_square_sample_32x32.jpg") #Green
     return img
+
+#extracting random square for background and foreground
+def getSquare_v3(path):
+
+    images_list = os.listdir(str(path)) #finding all potential images
+    images_count = len(images_list) #total number of potential images
+    random_n = np.random.randint(0, images_count) #random number to select image
+    random_image_name = images_list[random_n] #selecting random image
+    image_path = str(path +"/" + random_image_name) #path to randomly selected image
+    random_image = cv2.imread(image_path) #importing image
+
+    #extracting height and width of image
+    width = random_image.shape[1]
+    height = random_image.shape[0]
+
+    #extracting random coordinates to begin cut out
+    x_coord = np.random.randint(0,width-33)
+    y_coord = np.random.randint(0,height-33)
+
+    #cropping array
+    crop_image = random_image[y_coord:y_coord+32,x_coord:x_coord+32]
+
+    return crop_image
 
 #gets foreground
 def getSquare_v1_green():
@@ -246,36 +273,26 @@ for i in range(iterations):
                 mask = cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
                 mask[mask>1] = 1 #ensuring all values are 1 or 0
 
-                green = getSquare_v1_green()
-                pink = getSquare_v1()
-                # pink = cv2.cvtColor(pink,cv2.COLOR_RGB2RGBA)
-                #
-                # #generating alpha layer from mask
-                # _,alpha = cv2.threshold(mask,0,255,cv2.THRESH_BINARY)
-                #
-                # #Applying mask (Generating image with black background
-                # image = applyMask(green,mask=mask)
-                #
-                # #splitting bgr elements of image
-                # b,g,r = cv2.split(image)
-                #
-                # #merging all elements into rgba image
-                # rgba = [b,g,r,alpha]
-                # overlay = cv2.merge(rgba,4) #creating 4 color channel (RGBA) image
-                #
-                # image = cv2.addWeighted(overlay,1,pink,1,0)
+                # green = getSquare_v1_green()
+                # pink = getSquare_v1()
 
-                image_out = np.copy(pink)#creating output image (with background to overlay letter)
+                #loading required images
+                background = getSquare_v3(background_path) #background
+                overlay = getSquare_v3(overlay_path) #overlay
+
+                image_out = np.copy(background)#creating output image (with background to overlay letter)
 
                 #overlaying each BGR channel foreground onto background as dictated by mask
-                image_out[:, :, 0] = np.where(mask == 1, green[:, :, 0], pink[:, :, 0])
-                image_out[:, :, 1] = np.where(mask == 1, green[:, :, 1], pink[:, :, 1])
-                image_out[:, :, 2] = np.where(mask == 1, green[:, :, 2], pink[:, :, 2])
+                image_out[:, :, 0] = np.where(mask == 1, overlay[:, :, 0], background[:, :, 0])
+                image_out[:, :, 1] = np.where(mask == 1, overlay[:, :, 1], background[:, :, 1])
+                image_out[:, :, 2] = np.where(mask == 1, overlay[:, :, 2], background[:, :, 2])
 
+
+                image_out = cv2.resize(image_out,(160,160))
                 #displaying for test purposes
                 cv2.imshow("Output", image_out)
 
-                cv2.waitKey(250)
+                cv2.waitKey(1000)
 
             else:
 
