@@ -19,8 +19,8 @@ from fontTools.ttLib import TTFont
 
 ###########----SETTINGS----###########
 blanks = True #should blanks be generated? (Empty sudoku cells)
-chars = ",.?" #All characters to include (Blanks are denoted above)
-iterations = 100 #number of images to create per character
+chars = "0123456789" #All characters to include (Blanks are denoted above)
+iterations = 1000 #number of images to create per character
 ######################################
 
 #extracting characters from string
@@ -69,14 +69,20 @@ fonts = fonts.reset_index(drop=True)
 #################################################----IMPORT FUNCTIONS----#################################################
 # defining a function that returns a square with randomized features as needed
 # in future versions of the code this will create a more complex square for use
-#gets background
+#v1 was used for debugging
 def getSquare_v1():
+
     #imports the required colour square, mostly for debugging purposes
     #img = cv2.imread("Black_square_sample_32x32.jpg") #Black
     #img = cv2.imread("White_square_sample_32x32.jpg") #White
     img = cv2.imread("Pink_square_sample_32x32.jpg") #Pink
     #img = cv2.imread("Green_square_sample_32x32.jpg") #Green
     return img
+
+# #generates a black square for mask creation
+# def getSquare_v2():
+#     img = np.zeros((32,32,3),dtype="uint8") # since this will be used for a mask it is fine to be pure black
+#     return img
 
 #extracting random square for background and foreground
 def getSquare_v3(path):
@@ -101,27 +107,13 @@ def getSquare_v3(path):
 
     return crop_image
 
-#gets foreground
-def getSquare_v1_green():
-    #imports the required colour square, mostly for debugging purposes
-    #img = cv2.imread("Black_square_sample_32x32.jpg") #Black
-    #img = cv2.imread("White_square_sample_32x32.jpg") #White
-    #img = cv2.imread("Pink_square_sample_32x32.jpg") #Pink
-    img = cv2.imread("Green_square_sample_32x32.jpg") #Green
-    return img
-
-def getSquare_v2():
-    #img = cv2.imread("Black_square_sample_32x32.jpg")  # imports white square
-    img = np.zeros((32,32,3),dtype="uint8") # since this will be used for a mask it is fine to be pure black
-    return img
-
 # #testing font functions
 # def getFont_v1():
 #     font = fonts[0][0]  # setting font
 #
 #     return font
 
-#random font selection
+#selecting a random font
 def getFont_v2(font_list):
 
     #selecting a random font from inputted list
@@ -223,6 +215,37 @@ def applyMask(src,mask):
 
     return maskApplied
 
+#random angle between -20 and 20 degrees for rotation with increased probability of small angle
+def randAngle():
+
+    #first random value (making smaller angles more likely)
+    random = np.random.randint(0, 100)
+
+    #zero tilt added
+    if random<50:
+        angle = 0
+
+    #-2 to 2 range
+    elif random<70:
+
+        angle = np.random.randint(-2,3)
+        print(angle)
+
+    #-5 to 5 range
+    elif random<85:
+        angle = np.random.randint(-5,6)
+
+    #-10 to 10 range
+    elif random<95:
+        angle = np.random.randint(-10, 11)
+
+    #-20 to 20 range
+    else:
+        angle = np.random.randint(-20, 21)
+
+    return angle
+
+
 ########################################################################################################################
 #appending blank if requested by user in settings
 if blanks == True:
@@ -236,21 +259,25 @@ for i in range(iterations):
     #loping through each letter
     for char in chars:
 
-        img_in = getSquare_v2()  #importing a square to overlay a character on
-
         #adding letter unless a blank is required
         if char != "Blank":
 
-            image_rgb = cv2.cvtColor(img_in, cv2.COLOR_BGR2RGB)  #converting image into RGB for pil
+            #image_in = getSquare_v2()  # importing black mask background
 
-            pil_image = Image.fromarray(image_rgb, "RGB")  #convcerting to pil image object
+            #image_rgb = cv2.cvtColor(image_in, cv2.COLOR_BGR2RGB)  #converting image into RGB for pil
 
-            draw = ImageDraw.Draw(pil_image)  # preparing window to be drawn on
+            #pil_image = Image.fromarray(image_rgb, "RGB")  #convcerting to pil image object #TODO need later
+
+            #creating mask background (black square) as a PIL image
+            transparent = Image.new("L", (32, 32), "black")
+            #"L" mode is a single channel image (greyscale) without specifying this defaults to black (0,0,0)
+            #This is a black square that will have a white image overlain. It will then be rotated and the black will
+            #will be subtracted leaving only the white letter
+
+            #draw = ImageDraw.Draw(pil_image) # preparing window to be drawn on
+            draw = ImageDraw.Draw(transparent) #preparing PIL draw action
 
             font = getFont_v2(fonts)  # randomly selecting a font from the list
-
-            #extracting font size and dimensions used to calculate font origin
-            font_size,dimensions = getFontSize(font,char)
 
             #checking required glyph exists
             glyph = glyphCheck(font,char)
@@ -258,23 +285,31 @@ for i in range(iterations):
             #if required glyph exists
             if glyph == 1:
 
+                # extracting font size and dimensions used to calculate font origin
+                font_size, dimensions = getFontSize(font, char)
+
                 # getting starting location to input into draw function
                 start_loc = getLoc(dimensions)
 
-                font = ImageFont.truetype(font,font_size) #preparing to "draw" letter on with selected font
+                font = ImageFont.truetype(font,font_size) #preparing to "draw" letter on with selected font PIL
 
-                draw.text(start_loc,char,font=font,fill=(255,255,255)) #drawing if possible
+                draw.text(start_loc,char,font=font,fill=255) #PIL Drawing letter
 
-                drawn_image = cv2.cvtColor(np.array(pil_image),cv2.COLOR_RGB2BGR) #converting image back to OpenCV format
+                #extracting random rotation angle
+                angle = randAngle()
 
-                image = drawn_image #selecting output if font has been added
+                rotated_image = transparent.rotate(angle, expand=1) #PIL white letter on black background rotated
 
-                #creating mask by converting BGR image into
-                mask = cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
-                mask[mask>1] = 1 #ensuring all values are 1 or 0
+                mask_background = Image.new("RGB", (32, 32), "black") #black background over which to place rotated white letter
 
-                # green = getSquare_v1_green()
-                # pink = getSquare_v1()
+                mask_background.paste(ImageOps.colorize(rotated_image, (0, 0, 0), (255, 255, 255)),(0,0), rotated_image) #TODO currently working on
+
+                #creating mask (starting from RGB pil image[32,32,3], 0 to 255 values and ending in Grayscale CV2 image [32,32] 0 or 1 binary valuues)
+                mask = np.array(mask_background) #converting PIL image to openCV image
+                mask = cv2.cvtColor(mask,cv2.COLOR_BGR2GRAY) #converting image to
+                mask[mask>1] = 1 #ensuring all values are 1 or 0 (becomes hard to see using imshow)
+
+                #drawn_image = cv2.cvtColor(np.array(pil_image),cv2.COLOR_RGB2BGR) #converting image back to OpenCV format
 
                 #loading required images
                 background = getSquare_v3(background_path) #background
@@ -287,12 +322,12 @@ for i in range(iterations):
                 image_out[:, :, 1] = np.where(mask == 1, overlay[:, :, 1], background[:, :, 1])
                 image_out[:, :, 2] = np.where(mask == 1, overlay[:, :, 2], background[:, :, 2])
 
-
-                image_out = cv2.resize(image_out,(160,160))
                 #displaying for test purposes
-                cv2.imshow("Output", image_out)
+                image_out = cv2.resize(image_out, (160, 160))
 
-                cv2.waitKey(1000)
+                #image_in = np.array(image_in) #TODO currently working on
+                cv2.imshow("Output", image_out)
+                cv2.waitKey(250)
 
             else:
 
@@ -300,11 +335,15 @@ for i in range(iterations):
 
         #skipping if blank is required
         else:
-            image = img_in #selecting image without font to take forward
+
+            #image_in = getSquare_v2()  # importing black mask background
+
+            #image = image_in #selecting image without font to take forward
 
             # #displaying for test purposes
             # cv2.imshow("Output",image)
             # cv2.waitKey(250)
+            print("else")
 
 #code success message
 print("The code has run successfully")
