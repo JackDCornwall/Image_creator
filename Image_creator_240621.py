@@ -16,11 +16,19 @@ import numpy as np
 import pandas as pd
 from PIL import ImageFont,ImageDraw,Image,ImageOps
 from fontTools.ttLib import TTFont
+from datetime import datetime
 
 ###########----SETTINGS----###########
+preview_mode = True #if preview is true, files aren't saved but displayed. If false, files are saved.
+preview_time = 250 #time in ms to display preview image
 blanks = True #should blanks be generated? (Empty sudoku cells)
-chars = "0123456789" #All characters to include (Blanks are denoted above)
-iterations = 1000 #number of images to create per character
+chars = "0123456789Abcdefghijklmnopqrstuvwxyz" #All characters to include (Blanks are denoted above)
+iterations = 100 #number of images to create per character
+max_smudge = 10 #maximum number of random smudges
+smudge_chance = 20 #likelyhood of smudge appearing
+smudge_spread = 70 #likelyhood of smudge spreading
+sprinkle_chance = 0 #percentage chance of a sprinkle appearing
+inversion_chance = 5 #percentage chance of an inversion occurring
 ######################################
 
 #extracting characters from string
@@ -29,7 +37,7 @@ chars = list(chars)
 #setting paths
 wd_path = os.getcwd() #current working directory
 fonts_path = "C://Windows/Fonts/"
-background_path = r"Backgrounds"
+background_path = "Backgrounds"
 overlay_path = "Overlays"
 
 
@@ -208,44 +216,225 @@ def getLoc(dim):
 
     return (y_loc,x_loc)
 
-#creating a mask from fed in image
-def applyMask(src,mask):
-
-    maskApplied = cv2.bitwise_and(src,src,mask=mask)
-
-    return maskApplied
+# #creating a mask from fed in image
+# def applyMask(src,mask):
+#
+#     maskApplied = cv2.bitwise_and(src,src,mask=mask)
+#
+#     return maskApplied
 
 #random angle between -20 and 20 degrees for rotation with increased probability of small angle
-def randAngle():
+def randAngle(max):
 
     #first random value (making smaller angles more likely)
     random = np.random.randint(0, 100)
 
     #zero tilt added
-    if random<50:
+    if random<30:
         angle = 0
 
-    #-2 to 2 range
-    elif random<70:
+    #-max/8 to max/8 range
+    elif random<55:
+        angle = np.random.randint(-max//8, (max//8)+1)
 
-        angle = np.random.randint(-2,3)
-        print(angle)
+    #-max/4 to max/4 range
+    elif random<75:
+        angle = np.random.randint(-max//4, (max//4)+1)
 
-    #-5 to 5 range
-    elif random<85:
-        angle = np.random.randint(-5,6)
+    #-max/2 to max/2 range
+    elif random<90:
+        angle = np.random.randint(-max//2, (max//2)+1)
 
-    #-10 to 10 range
-    elif random<95:
-        angle = np.random.randint(-10, 11)
-
-    #-20 to 20 range
+    #-max to max range
     else:
-        angle = np.random.randint(-20, 21)
+        angle = np.random.randint(-max, max+1)
 
     return angle
 
+# apply text using PIL
+def maskText(font_path, font_size, text, angle):
+    font = ImageFont.truetype(font_path, font_size)  # preparing to "draw" letter on with selected font PIL
 
+    # creating mask background (black square) as a PIL image
+    transparent = Image.new("L", (32, 32), "black")
+    # "L" mode is a single channel image (greyscale) without specifying this defaults to black (0,0,0)
+    # This is a black square that will have a white image overlain. It will then be rotated and the black will
+    # will be subtracted leaving only the white letter
+
+    draw = ImageDraw.Draw(transparent)  # preparing PIL draw action
+
+    draw.text(start_loc, text, font=font, fill=255)  # PIL Drawing letter
+
+    rotated_image = transparent.rotate(angle, expand=1)  # PIL white letter on black background rotated
+
+    # black background over which to place rotated white letter
+    mask_background = Image.new("RGB", (32, 32), "black")
+
+    mask_background.paste(ImageOps.colorize(rotated_image, (0, 0, 0), (255, 255, 255)), (0, 0),
+                          rotated_image)  # place white letter over black background
+
+    # creating mask (starting from RGB pil image[32,32,3], 0 to 255 values and ending in Grayscale CV2 image [32,32] 0 or 1 binary valuues)
+    mask = np.array(mask_background)  # converting PIL image to openCV image
+    mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)  # converting image to
+    mask[mask > 1] = 1  # ensuring all values are 1 or 0 (becomes hard to see using imshow)
+
+    return mask
+
+# overlaying an image over another using
+def overlayImg(background, overlay, mask):
+    image_out = np.copy(background)  # creating output image (with background to overlay letter)
+
+    # overlaying each BGR channel foreground onto background as dictated by mask
+    image_out[:, :, 0] = np.where(mask == 1, overlay[:, :, 0], background[:, :, 0])
+    image_out[:, :, 1] = np.where(mask == 1, overlay[:, :, 1], background[:, :, 1])
+    image_out[:, :, 2] = np.where(mask == 1, overlay[:, :, 2], background[:, :, 2])
+
+    return image_out
+
+#generating a random smudge
+def randomSmudges(smudge_chance, spread_chance):
+    random = np.random.randint(0, 100)
+
+    # checking against random chance
+    if random < smudge_chance:
+
+        smudge_mask = np.zeros((32, 32), dtype="uint8")  # creating mask
+
+        # random origin of smudge
+        origin = [np.random.randint(0, 32), np.random.randint(0, 32)]
+        # print(origin)
+
+        smudge_mask[origin[0], origin[1]] = 1
+
+        # spreadking from origin
+        while random < spread_chance:
+
+            # randomly selecting a direction
+            direction = np.random.randint(0, 4)
+
+            # spreading smudge
+            # moving up
+            if direction == 0:
+
+                # checking we can move up
+                if origin[0] < 31:
+                    #moving up unless we are at the top
+                    origin[0] = origin[0] + 1
+
+            # moving down
+            elif direction == 1:
+
+                # checking we can move down
+                if origin[0] > 0:
+                    # moving down unless we are at the bottom
+                    origin[0] = origin[0] - 1
+
+            # moving right
+            elif direction == 2:
+
+                # checking we can move right
+                if origin[1] < 31:
+                    # moving right unless we are at the side
+                    origin[1] = origin[1] + 1
+
+            # moving left
+            elif direction == 3:
+
+                # checking we can move left
+                if origin[1] > 0:
+                    # moving left unless we are at the side
+                    origin[1] = origin[1] - 1
+
+            smudge_mask[origin[0], origin[1]] = 1  # updating mask
+            random = np.random.randint(0, 100)  # retesting probability
+
+        #returning true & smudge mask so that it can be applied
+        return True, smudge_mask
+
+    else:
+        # returning false so that random smudge isn't implemented
+        return False, ""
+
+#generating random colour for sprinkle
+def randomSprinkle():
+    R = np.random.randint(0, 256)
+    G = np.random.randint(0, 256)
+    B = np.random.randint(0, 256)
+
+    # returning 3 coolors
+    return R, G, B
+
+#sprinkles is the coloured version of salt and peppering images
+def sprinkles(img, sprinkle_chance):
+    # looping through rows
+    for row in range(32):
+
+        # looping through columns
+        for col in range(32):
+
+            # checking if a sprinkle should occur
+            if np.random.randint(0, 100) < sprinkle_chance:
+                # generating sprinkle colours
+                R, G, B = randomSprinkle()
+
+                # adding sprinkle
+                img[row, col, 0] = B
+                img[row, col, 1] = G
+                img[row, col, 2] = R
+
+    return img  # returning sprinkled image
+
+#function that inverts the colours of a cv2 image
+def randomInvert(img, inversion_chance):
+    # checking if inversion should occur
+    if np.random.randint(0, 100) < inversion_chance:
+        # performing inversion
+        img = (255 - img)
+
+    return img
+
+
+# saving file as random filetype with random quality
+def saveFile(img, name):
+    # getting date and time to append
+    now = datetime.now()  # extracting time string
+    now = now.strftime("%d_%m_%Y_%H_%M_%S")  # converting string to be filename compatible
+
+    file_name = name + "_" + str(now)
+
+    # randomly choosing filetype
+    file_type = np.random.randint(0, 3)
+
+    # saving file as chosen filetype
+    # saving as jpg
+    if (file_type == 0):
+
+        # randomly selecting quality
+        quality = np.random.randint(40, 101)
+
+        # saving
+        cv2.imwrite(("Created images/" + char + "/" + file_name + "_" + str(quality) + ".jpg"), img,
+                    [cv2.IMWRITE_JPEG_QUALITY, quality])
+
+    # saving as jpeg
+    elif (file_type == 1):
+
+        # randomly selecting quality
+        quality = np.random.randint(40, 101)
+
+        # saving
+        cv2.imwrite(("Created images/" + char + "/" + file_name + "_" + str(quality) + ".jpeg"), img,
+                    [cv2.IMWRITE_JPEG_QUALITY, quality])
+
+    # saving as png
+    elif (file_type == 2):
+
+        # randomly selecting compression
+        compression = np.random.randint(0, 10)
+
+        # saving
+        cv2.imwrite(("Created images/" + char + "/" + file_name + "_" + str(compression) + ".png"), img,
+                    [cv2.IMWRITE_PNG_COMPRESSION, compression])
 ########################################################################################################################
 #appending blank if requested by user in settings
 if blanks == True:
@@ -262,21 +451,6 @@ for i in range(iterations):
         #adding letter unless a blank is required
         if char != "Blank":
 
-            #image_in = getSquare_v2()  # importing black mask background
-
-            #image_rgb = cv2.cvtColor(image_in, cv2.COLOR_BGR2RGB)  #converting image into RGB for pil
-
-            #pil_image = Image.fromarray(image_rgb, "RGB")  #convcerting to pil image object #TODO need later
-
-            #creating mask background (black square) as a PIL image
-            transparent = Image.new("L", (32, 32), "black")
-            #"L" mode is a single channel image (greyscale) without specifying this defaults to black (0,0,0)
-            #This is a black square that will have a white image overlain. It will then be rotated and the black will
-            #will be subtracted leaving only the white letter
-
-            #draw = ImageDraw.Draw(pil_image) # preparing window to be drawn on
-            draw = ImageDraw.Draw(transparent) #preparing PIL draw action
-
             font = getFont_v2(fonts)  # randomly selecting a font from the list
 
             #checking required glyph exists
@@ -291,59 +465,127 @@ for i in range(iterations):
                 # getting starting location to input into draw function
                 start_loc = getLoc(dimensions)
 
-                font = ImageFont.truetype(font,font_size) #preparing to "draw" letter on with selected font PIL
-
-                draw.text(start_loc,char,font=font,fill=255) #PIL Drawing letter
-
                 #extracting random rotation angle
-                angle = randAngle()
+                angle = randAngle(20)
 
-                rotated_image = transparent.rotate(angle, expand=1) #PIL white letter on black background rotated
-
-                mask_background = Image.new("RGB", (32, 32), "black") #black background over which to place rotated white letter
-
-                mask_background.paste(ImageOps.colorize(rotated_image, (0, 0, 0), (255, 255, 255)),(0,0), rotated_image) #TODO currently working on
-
-                #creating mask (starting from RGB pil image[32,32,3], 0 to 255 values and ending in Grayscale CV2 image [32,32] 0 or 1 binary valuues)
-                mask = np.array(mask_background) #converting PIL image to openCV image
-                mask = cv2.cvtColor(mask,cv2.COLOR_BGR2GRAY) #converting image to
-                mask[mask>1] = 1 #ensuring all values are 1 or 0 (becomes hard to see using imshow)
-
-                #drawn_image = cv2.cvtColor(np.array(pil_image),cv2.COLOR_RGB2BGR) #converting image back to OpenCV format
+                #requesting mask
+                mask = maskText(font,font_size,char,angle)
 
                 #loading required images
                 background = getSquare_v3(background_path) #background
                 overlay = getSquare_v3(overlay_path) #overlay
 
-                image_out = np.copy(background)#creating output image (with background to overlay letter)
+                #overlaying
+                image_out = overlayImg(background,overlay,mask)
 
-                #overlaying each BGR channel foreground onto background as dictated by mask
-                image_out[:, :, 0] = np.where(mask == 1, overlay[:, :, 0], background[:, :, 0])
-                image_out[:, :, 1] = np.where(mask == 1, overlay[:, :, 1], background[:, :, 1])
-                image_out[:, :, 2] = np.where(mask == 1, overlay[:, :, 2], background[:, :, 2])
+                #adding up to max_smudge smudges
+                for k in range(max_smudge):
 
-                #displaying for test purposes
-                image_out = cv2.resize(image_out, (160, 160))
+                    # generating smudge
+                    apply, smudge_mask = randomSmudges(smudge_chance,smudge_spread)
 
-                #image_in = np.array(image_in) #TODO currently working on
-                cv2.imshow("Output", image_out)
-                cv2.waitKey(250)
+                    # applying smudge if needed
+                    if apply == True:
+
+                        # randomly selecting smudge folder
+                        random_smu = np.random.randint(0, 2)
+
+                        # selecting between folders
+                        if random_smu == 0:
+
+                            # overlay smudge will be dark
+                            overlay = getSquare_v3(overlay_path)  # overlay
+
+                        else:
+
+                            # overlay smudge will be light
+                            overlay = getSquare_v3(background_path)  # overlay
+
+                        # ovelaying smudge
+                        image_out = overlayImg(image_out, overlay, smudge_mask)
+
+                image_out = sprinkles(image_out,sprinkle_chance) #adding rainbow sprinkles
+
+                #randomly inverting image colours
+                image_out = randomInvert(image_out,inversion_chance)
+
+
+
+                #checking for preview mode
+                if preview_mode == False:
+
+                    # name of export file
+                    name = char + "_" + str(i) + "_" + str(max_smudge) + "_" + str(smudge_chance) + "_" + str(smudge_spread) + "_" + str(inversion_chance)
+
+                    #saving file
+                    saveFile(image_out, name)
+
+                else:
+
+                    #displaying for test purposes
+                    image_out = cv2.resize(image_out, (160, 160))
+                    cv2.imshow("Output", image_out)
+                    cv2.waitKey(preview_time)
 
             else:
 
+                #ignoring when glyph is returned
                 print("Glyph doesnt exists  for font :",font)
 
         #skipping if blank is required
         else:
 
-            #image_in = getSquare_v2()  # importing black mask background
+            # loading required images
+            image_out = getSquare_v3(background_path)  # background
 
-            #image = image_in #selecting image without font to take forward
+            # adding up to max_smudge smudges
+            for k in range(max_smudge):
 
-            # #displaying for test purposes
-            # cv2.imshow("Output",image)
-            # cv2.waitKey(250)
-            print("else")
+                # generating smudge
+                apply, smudge_mask = randomSmudges(smudge_chance, smudge_spread)
+
+                # applying smudge if needed
+                if apply == True:
+
+                    # randomly selecting smudge folder
+                    random_smu = np.random.randint(0, 2)
+
+                    # selecting between folders
+                    if random_smu == 0:
+
+                        # overlay smudge will be dark
+                        overlay = getSquare_v3(overlay_path)  # overlay
+
+                    else:
+
+                        # overlay smudge will be light
+                        overlay = getSquare_v3(background_path)  # overlay
+
+                    # ovelaying smudge
+                    image_out = overlayImg(image_out, overlay, smudge_mask)
+
+            image_out = sprinkles(image_out, sprinkle_chance)  # adding rainbow sprinkles
+
+            # randomly inverting image colours
+            image_out = randomInvert(image_out, inversion_chance)
+
+            # checking for preview mode
+            if preview_mode == False:
+
+                # name of export file
+                name = char + "_" + str(i) + "_" + str(max_smudge) + "_" + str(smudge_chance) + "_" + str(
+                    smudge_spread) + "_" + str(inversion_chance)
+                print(name)
+
+                # saving file
+                saveFile(image_out, name)
+
+            else:
+
+                # displaying for test purposes
+                image_out = cv2.resize(image_out, (160, 160))
+                cv2.imshow("Output", image_out)
+                cv2.waitKey(preview_time)
 
 #code success message
 print("The code has run successfully")
