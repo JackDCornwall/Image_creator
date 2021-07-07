@@ -19,16 +19,18 @@ from fontTools.ttLib import TTFont
 from datetime import datetime
 
 ###########----SETTINGS----###########
-preview_mode = True #if preview is true, files aren't saved but displayed. If false, files are saved.
+preview_mode = False #if preview is true, files aren't saved but displayed. If false, files are saved.
 preview_time = 250 #time in ms to display preview image
-blanks = True #should blanks be generated? (Empty sudoku cells)
-chars = "0123456789Abcdefghijklmnopqrstuvwxyz" #All characters to include (Blanks are denoted above)
-iterations = 100 #number of images to create per character
+blanks = False #should blanks be generated? (Empty sudoku cells)
+chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ" #All characters to include (Blanks are denoted above)
+'''abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789'''
+iterations = 3000 #number of images to create per character
+max_angle = 20 #maximum angle rotation for any letters
 max_smudge = 10 #maximum number of random smudges
-smudge_chance = 20 #likelyhood of smudge appearing
-smudge_spread = 70 #likelyhood of smudge spreading
-sprinkle_chance = 0 #percentage chance of a sprinkle appearing
-inversion_chance = 5 #percentage chance of an inversion occurring
+smudge_chance = 40 #likelyhood of smudge appearing
+smudge_spread = 90 #likelyhood of smudge spreading
+sprinkle_chance = 4 #percentage chance of a sprinkle appearing
+inversion_chance = 1 #percentage chance of an inversion occurring
 ######################################
 
 #extracting characters from string
@@ -43,7 +45,6 @@ overlay_path = "Overlays"
 
 #generating list of all fonts on pc
 fonts = os.listdir(fonts_path)
-
 #converting fonts list to np array to subset
 fonts = pd.DataFrame(fonts)
 
@@ -169,9 +170,18 @@ def getFontSize(font,char):
         #preparing font to test size
         try_font = ImageFont.truetype(font_path,9+attempt)
 
-        #extracting font dimensions
-        font_dim = try_font.getsize(char)
+        #attempts to extract font size, however sometimes this raises OSErrors
+        try:
 
+            #extracting font dimensions
+            font_dim = try_font.getsize(char)
+
+        #If OSError is raised catch it and use a simple font that works
+        except OSError:
+
+            font_path = r"C://Windows/Fonts/times.ttf"
+            try_font = ImageFont.truetype(font_path, 10)
+            font_dim = try_font.getsize(char)
         #extracting maximum dimension
         max_dim = max(font_dim)
 
@@ -445,6 +455,9 @@ if blanks == True:
 #looping through the user requested number of iterations
 for i in range(iterations):
 
+    #printing progress
+    print("Current iteration:",i,"of",iterations,"total")
+
     #loping through each letter
     for char in chars:
 
@@ -466,7 +479,7 @@ for i in range(iterations):
                 start_loc = getLoc(dimensions)
 
                 #extracting random rotation angle
-                angle = randAngle(20)
+                angle = randAngle(max_angle)
 
                 #requesting mask
                 mask = maskText(font,font_size,char,angle)
@@ -508,8 +521,6 @@ for i in range(iterations):
 
                 #randomly inverting image colours
                 image_out = randomInvert(image_out,inversion_chance)
-
-
 
                 #checking for preview mode
                 if preview_mode == False:
@@ -575,7 +586,6 @@ for i in range(iterations):
                 # name of export file
                 name = char + "_" + str(i) + "_" + str(max_smudge) + "_" + str(smudge_chance) + "_" + str(
                     smudge_spread) + "_" + str(inversion_chance)
-                print(name)
 
                 # saving file
                 saveFile(image_out, name)
