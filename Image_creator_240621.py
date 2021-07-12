@@ -8,6 +8,7 @@
 #Date: 24.06.21
 #Description: automatically creates a large library of varied images that can be used for ML
 '''
+
 #importing required packages
 import cv2
 import os
@@ -19,18 +20,19 @@ from fontTools.ttLib import TTFont
 from datetime import datetime
 
 ###########----SETTINGS----###########
-preview_mode = False #if preview is true, files aren't saved but displayed. If false, files are saved.
+preview_mode = True #if preview is true, files aren't saved but displayed. If false, files are saved.
 preview_time = 250 #time in ms to display preview image
 blanks = False #should blanks be generated? (Empty sudoku cells)
-chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ" #All characters to include (Blanks are denoted above)
+chars = "012" #All characters to include (Blanks are denoted above)
 '''abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789'''
-iterations = 3000 #number of images to create per character
-max_angle = 20 #maximum angle rotation for any letters
-max_smudge = 10 #maximum number of random smudges
-smudge_chance = 40 #likelyhood of smudge appearing
-smudge_spread = 90 #likelyhood of smudge spreading
+iterations = 2000
+#number of images to create per character
+max_angle = 25 #maximum angle rotation for any letters
+max_smudge = 5 #maximum number of random smudges
+smudge_chance = 20 #likelyhood of smudge appearing
+smudge_spread = 30 #likelyhood of smudge spreading
 sprinkle_chance = 4 #percentage chance of a sprinkle appearing
-inversion_chance = 1 #percentage chance of an inversion occurring
+inversion_chance = 3 #percentage chance of an inversion occurring
 ######################################
 
 #extracting characters from string
@@ -446,6 +448,8 @@ def saveFile(img, name):
         cv2.imwrite(("Created images/" + char + "/" + file_name + "_" + str(compression) + ".png"), img,
                     [cv2.IMWRITE_PNG_COMPRESSION, compression])
 ########################################################################################################################
+
+
 #appending blank if requested by user in settings
 if blanks == True:
 
